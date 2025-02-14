@@ -185,7 +185,7 @@ double slap(int argc, char **argv, std::vector<double>& alphavec, std::vector<in
     	
     	for (size_t i = 0; i < n_size; ++i) {
         	for (size_t j = 0; j < n_size; ++j) {
-            	inputmatrix[5].push_back(1);
+            	inputmatrix[5].push_back(0.5);
         	}
     	}
     	inputmatrix[5].insert(inputmatrix[5].end(), alphavec.begin(), alphavec.end());
