@@ -49,12 +49,12 @@ void handler(int sig) {
     exit(1);
 }
 
-double slap(int argc, char **argv, std::vector<double>& u1, std::vector<int>& u2, std::vector<double>& u3) {
+double slap(int argc, char **argv, std::vector<double>& alphavec, std::vector<int>& targetvec, std::vector<std::vector<double>>& pointsvec) {
         signal(SIGSEGV, handler);
         std::cout << "Hello, World! " << std::endl;
         //DCRTPoly a = DCRTPoly();
         unsigned int plain_bits = 15; //log t
-        unsigned int num_users = 3; //n
+        unsigned int num_users = 6; //n
         unsigned int iters = 1; //i
         unsigned int k_prime = 1; //k
         Scheme scheme1 = NS;
@@ -142,19 +142,64 @@ double slap(int argc, char **argv, std::vector<double>& u1, std::vector<int>& u2
 
         pp.PolynomialEnvSetup(poly_noise_times, poly_enc_times);
 
+    	size_t n_size = targetvec.size();
+    	
+    	std::vector<double> onevec(n_size, 1);
+    	std::vector<double> minusonevec(n_size, -1);
+    	std::vector<std::vector<double>> inputmatrix(6);
+
+    	for (size_t i = 0; i < n_size; ++i) {
+        	for (size_t j = 0; j < n_size; ++j) {
+            	inputmatrix[0].push_back(targetvec[i]);
+        	}
+    	}
+    	inputmatrix[0].insert(inputmatrix[0].end(), onevec.begin(), onevec.end());
+
+    	for (size_t i = 0; i < n_size; ++i) {
+        	for (size_t j = 0; j < n_size; ++j) {
+            	inputmatrix[1].push_back(targetvec[j]);
+        	}
+    	}
+    	inputmatrix[1].insert(inputmatrix[1].end(), onevec.begin(), onevec.end());
+
+    	for (size_t i = 0; i < n_size; ++i) {
+        	for (size_t j = 0; j < n_size; ++j) {
+            	inputmatrix[2].push_back(kernel(pointsvec[i], pointsvec[j]));
+        	}
+    	}
+    	inputmatrix[2].insert(inputmatrix[2].end(), onevec.begin(), onevec.end());
+    
+    	for (size_t i = 0; i < n_size; ++i) {
+        	for (size_t j = 0; j < n_size; ++j) {
+            	inputmatrix[3].push_back(targetvec[i]);
+        	}
+    	}
+    	inputmatrix[3].insert(inputmatrix[3].end(), onevec.begin(), onevec.end());
+
+    	for (size_t i = 0; i < n_size; ++i) {
+        	for (size_t j = 0; j < n_size; ++j) {
+            	inputmatrix[4].push_back(targetvec[j]);
+        	}
+    	}
+    	inputmatrix[4].insert(inputmatrix[4].end(), minusonevec.begin(), minusonevec.end());
+    	
+    	for (size_t i = 0; i < n_size; ++i) {
+        	for (size_t j = 0; j < n_size; ++j) {
+            	inputmatrix[5].push_back(1);
+        	}
+    	}
+    	inputmatrix[5].insert(inputmatrix[5].end(), alphavec.begin(), alphavec.end());
+    	
+    	std::vector<double> expvec(n_size, 1);
+    	
         for (int i = 0; i < num_users; i++) {
-            std::vector<double> inputvec = u1;
-            std::vector<double> expvec(u1.size(), 1);
-
-            //PUT ANOTHER TIME std::cout << i << " input: " << inputvec << std::endl;
-
-            pp.PolynomialEncryption(inputvec, expvec, i, poly_noise_times, poly_enc_times);
+            //std::cout << i << " input: " << inputmatrix[i] << std::endl;
+            pp.PolynomialEncryption(inputmatrix[i], expvec, i, poly_noise_times, poly_enc_times);
         }
-
 
         std::vector<double> decrypt_times;
 
-        std::vector<double> constants(pp.aggregator.plaintextParams.GetRingDimension()/2,2);
+        std::vector<double> constants(num_users, 1);
         std::vector<double> outputvec = pp.PolynomialDecryption(constants, 1, decrypt_times);
 
         std::cout << "Final output: " << outputvec << std::endl;
@@ -181,12 +226,8 @@ double SVMOutput(int argc, char **argv, int i) {
     //for (size_t j = 0; j < points.size(); j++)
         //result += alpha[j] * target[j] * kernel(points[i], points[j]);
     //return result;
-    std::vector<double> kernel_points;
-    for (size_t j = 0; j < points.size(); j++){
-       kernel_points.push_back(kernel(points[i], points[j]));
-    }
-    double result = slap(argc, argv, alpha, target, kernel_points);
-    result -= b;
+
+    double result = slap(argc, argv, alpha, target, points);
 
     return result;
 }
