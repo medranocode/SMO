@@ -49,7 +49,7 @@ void handler(int sig) {
     exit(1);
 }
 
-double slap(int argc, char **argv, std::vector<double>& alphavec, std::vector<int>& targetvec, std::vector<std::vector<double>>& pointsvec) {
+double slap(int argc, char **argv, std::vector<std::vector<double>>& inputmatrix) {
         signal(SIGSEGV, handler);
         std::cout << "Hello, World! " << std::endl;
         //DCRTPoly a = DCRTPoly();
@@ -107,31 +107,6 @@ double slap(int argc, char **argv, std::vector<double>& alphavec, std::vector<in
 
         unsigned int MAX_CTEXTS_DEFAULT = 20;
 
-        //temp();
-
-        //Code for testing SLAP, which isn't what this paper is about
-
-        /**
-        PSACryptocontext p = PSACryptocontext(plain_bits, num_users, iters, scheme1);
-        std::vector<double> noise_times;
-        std::vector<double> enc_times;
-        std::vector<double> dec_times;
-        p.TestEncryption(iters, false, noise_times, enc_times);
-
-        p.TestDecryption(iters,dec_times);
-
-        for(const double d : noise_times){
-            std::cout << "noise_times " << d << '\n';
-        }
-        for(const double d : enc_times){
-            std::cout << "enc_times " << d << '\n';
-        }
-        for(const double d : dec_times){
-            std::cout << "dec_times " << d << '\n';
-        }
-         **/
-
-
         PSACryptocontext pp = PSACryptocontext(plain_bits, num_users, iters, scheme1);
 
         std::vector<double> poly_noise_times;
@@ -142,56 +117,9 @@ double slap(int argc, char **argv, std::vector<double>& alphavec, std::vector<in
 
         pp.PolynomialEnvSetup(poly_noise_times, poly_enc_times);
 
-    	size_t n_size = targetvec.size();
-    	
-    	std::vector<double> onevec(n_size, 1);
-    	std::vector<double> minusonevec(n_size, -1);
-    	std::vector<std::vector<double>> inputmatrix(6);
-
-    	for (size_t i = 0; i < n_size; ++i) {
-        	for (size_t j = 0; j < n_size; ++j) {
-            	inputmatrix[0].push_back(targetvec[i]);
-        	}
-    	}
-    	inputmatrix[0].insert(inputmatrix[0].end(), onevec.begin(), onevec.end());
-
-    	for (size_t i = 0; i < n_size; ++i) {
-        	for (size_t j = 0; j < n_size; ++j) {
-            	inputmatrix[1].push_back(targetvec[j]);
-        	}
-    	}
-    	inputmatrix[1].insert(inputmatrix[1].end(), onevec.begin(), onevec.end());
-
-    	for (size_t i = 0; i < n_size; ++i) {
-        	for (size_t j = 0; j < n_size; ++j) {
-            	inputmatrix[2].push_back(kernel(pointsvec[i], pointsvec[j]));
-        	}
-    	}
-    	inputmatrix[2].insert(inputmatrix[2].end(), onevec.begin(), onevec.end());
+// HERE
+    	std::vector<double> expvec(inputmatrix[0].size(), 1);
     
-    	for (size_t i = 0; i < n_size; ++i) {
-        	for (size_t j = 0; j < n_size; ++j) {
-            	inputmatrix[3].push_back(targetvec[i]);
-        	}
-    	}
-    	inputmatrix[3].insert(inputmatrix[3].end(), onevec.begin(), onevec.end());
-
-    	for (size_t i = 0; i < n_size; ++i) {
-        	for (size_t j = 0; j < n_size; ++j) {
-            	inputmatrix[4].push_back(targetvec[j]);
-        	}
-    	}
-    	inputmatrix[4].insert(inputmatrix[4].end(), minusonevec.begin(), minusonevec.end());
-    	
-    	for (size_t i = 0; i < n_size; ++i) {
-        	for (size_t j = 0; j < n_size; ++j) {
-            	inputmatrix[5].push_back(0.5);
-        	}
-    	}
-    	inputmatrix[5].insert(inputmatrix[5].end(), alphavec.begin(), alphavec.end());
-    	
-    	std::vector<double> expvec(n_size, 1);
-    	
         for (int i = 0; i < num_users; i++) {
             //std::cout << i << " input: " << inputmatrix[i] << std::endl;
             pp.PolynomialEncryption(inputmatrix[i], expvec, i, poly_noise_times, poly_enc_times);
@@ -203,7 +131,6 @@ double slap(int argc, char **argv, std::vector<double>& alphavec, std::vector<in
         std::vector<double> outputvec = pp.PolynomialDecryption(constants, 1, decrypt_times);
 
         std::cout << "Final output: " << outputvec << std::endl;
-
 
         for(const double d : poly_noise_times){
             //std::cout << "poly_noise_times " << d << '\n';
@@ -221,13 +148,64 @@ double slap(int argc, char **argv, std::vector<double>& alphavec, std::vector<in
     }
 
 // SVM output for a given point
-double SVMOutput(int argc, char **argv, int i) {
-    //double result = -b;
-    //for (size_t j = 0; j < points.size(); j++)
-        //result += alpha[j] * target[j] * kernel(points[i], points[j]);
-    //return result;
+double SVMOutput(int argc, char **argv, int k, std::vector<double>& alphavec, std::vector<int>& targetvec, std::vector<std::vector<double>>& pointsvec) {
 
-    double result = slap(argc, argv, alpha, target, points);
+    	size_t n_size = 15; // So that the vector size is 15 * 16 = 240 < 256
+    	double result = 0;
+    	
+    	std::vector<double> onevec(n_size, 1);
+    	std::vector<double> minusonevec(n_size, -1);
+    	
+    	size_t samples = targetvec.size()/n_size;
+    	
+    	for(size_t s = 0; s < samples; s += n_size){
+    	
+	    	std::vector<std::vector<double>> inputmatrix(6);
+
+	    	for (size_t i = 0; i < n_size; ++i) {
+			for (size_t j = 0; j < n_size; ++j) {
+		    	inputmatrix[0].push_back(targetvec[s + i]);
+			}
+	    	}
+	    	inputmatrix[0].insert(inputmatrix[0].end(), onevec.begin(), onevec.end());
+
+	    	for (size_t i = 0; i < n_size; ++i) {
+			for (size_t j = 0; j < n_size; ++j) {
+		    	inputmatrix[1].push_back(targetvec[s + j]);
+			}
+	    	}
+	    	inputmatrix[1].insert(inputmatrix[1].end(), onevec.begin(), onevec.end());
+
+	    	for (size_t i = 0; i < n_size; ++i) {
+			for (size_t j = 0; j < n_size; ++j) {
+		    	inputmatrix[2].push_back(kernel(pointsvec[s + i], pointsvec[s + j]));
+			}
+	    	}
+	    	inputmatrix[2].insert(inputmatrix[2].end(), onevec.begin(), onevec.end());
+	    
+	    	for (size_t i = 0; i < n_size; ++i) {
+			for (size_t j = 0; j < n_size; ++j) {
+		    	inputmatrix[3].push_back(targetvec[s + i]);
+			}
+	    	}
+	    	inputmatrix[3].insert(inputmatrix[3].end(), onevec.begin(), onevec.end());
+
+	    	for (size_t i = 0; i < n_size; ++i) {
+			for (size_t j = 0; j < n_size; ++j) {
+		    	inputmatrix[4].push_back(targetvec[s + j]);
+			}
+	    	}
+	    	inputmatrix[4].insert(inputmatrix[4].end(), minusonevec.begin(), minusonevec.end());
+	    	
+	    	for (size_t i = 0; i < n_size; ++i) {
+			for (size_t j = 0; j < n_size; ++j) {
+		    	inputmatrix[5].push_back(0.5);
+			}
+	    	}
+	    	inputmatrix[5].insert(inputmatrix[5].end(), alphavec.begin() + s, alphavec.begin() + s + n_size - 1);
+
+    		result += slap(argc, argv, inputmatrix);
+    	}
 
     return result;
 }
@@ -249,8 +227,8 @@ bool takeStep(int argc, char **argv, int i1, int i2) {
 
     double alpha1 = alpha[i1], alpha2 = alpha[i2];
     int y1 = target[i1], y2 = target[i2];
-    double E1 = SVMOutput(argc, argv, i1) - y1;
-    double E2 = SVMOutput(argc, argv, i2) - y2;
+    double E1 = SVMOutput(argc, argv, i1, alpha, target, points) - y1;
+    double E2 = SVMOutput(argc, argv, i2, alpha, target, points) - y2;
     double s = y1 * y2;
 
     double L, H;
@@ -306,12 +284,12 @@ void SMO(int argc, char **argv) {
     while (numChanged > 0 || examineAll) {
         numChanged = 0;
         if (examineAll) {
-            for (size_t i = 0; i < points.size(); i++)
-                numChanged += takeStep(argc, argv, rand() % points.size(), i);
+            for (size_t i = 0; i < points[0].size(); i++)
+                numChanged += takeStep(argc, argv, rand() % points[0].size(), i);
         } else {
-            for (size_t i = 0; i < points.size(); i++)
+            for (size_t i = 0; i < points[0].size(); i++)
                 if (alpha[i] > 0 && alpha[i] < C)
-                    numChanged += takeStep(argc, argv, rand() % points.size(), i);
+                    numChanged += takeStep(argc, argv, rand() % points[0].size(), i);
         }
 
         if (examineAll) examineAll = false;
@@ -362,7 +340,7 @@ int main(int argc, char **argv){
     loadCSV("winequality-red.csv", points, target);
 
     // Initialize alpha and weight vectors
-    alpha = vector<double>(points.size(), 0.0);
+    alpha = vector<double>(points[0].size(), 0.0);
     w = vector<double>(points[0].size(), 0.0);
 
     // Run the SMO algorithm
