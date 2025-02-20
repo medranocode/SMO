@@ -117,7 +117,6 @@ double slap(int argc, char **argv, std::vector<std::vector<double>>& inputmatrix
 
         pp.PolynomialEnvSetup(poly_noise_times, poly_enc_times);
 
-// HERE
     	std::vector<double> expvec(inputmatrix[0].size(), 1);
     
         for (int i = 0; i < num_users; i++) {
@@ -147,8 +146,13 @@ double slap(int argc, char **argv, std::vector<std::vector<double>>& inputmatrix
         return sum;
     }
 
+double SVMOutputonpoint(int argc, char **argv, int k){
+	double u = kernel(w, points[k]) - b;
+	return u;
+}
+
 // SVM output for a given point
-double SVMOutput(int argc, char **argv, int k, std::vector<double>& alphavec, std::vector<int>& targetvec, std::vector<std::vector<double>>& pointsvec) {
+double objectiveFunction(int argc, char **argv, std::vector<double>& alphavec, std::vector<int>& targetvec, std::vector<std::vector<double>>& pointsvec) {
 
     	size_t n_size = 15; // So that the vector size is 15 * 16 = 240 < 256
     	double result = 0;
@@ -210,25 +214,14 @@ double SVMOutput(int argc, char **argv, int k, std::vector<double>& alphavec, st
     return result;
 }
 
-// Function to update the weight vector
-void updateWeights(int i1, int i2, double oldAlpha1, double oldAlpha2) {
-    double deltaAlpha1 = alpha[i1] - oldAlpha1;
-    double deltaAlpha2 = alpha[i2] - oldAlpha2;
-
-    for (size_t i = 0; i < w.size(); i++) {
-        w[i] += target[i1] * deltaAlpha1 * points[i1][i] +
-                target[i2] * deltaAlpha2 * points[i2][i];
-    }
-}
-
 // TakeStep method
 bool takeStep(int argc, char **argv, int i1, int i2) {
     if (i1 == i2) return false;
 
     double alpha1 = alpha[i1], alpha2 = alpha[i2];
     int y1 = target[i1], y2 = target[i2];
-    double E1 = SVMOutput(argc, argv, i1, alpha, target, points) - y1;
-    double E2 = SVMOutput(argc, argv, i2, alpha, target, points) - y2;
+    double E1 = SVMOutputonpoint(argc, argv, i1) - y1;
+    double E2 = SVMOutputonpoint(argc, argv, i2) - y2;
     double s = y1 * y2;
 
     double L, H;
@@ -252,28 +245,56 @@ bool takeStep(int argc, char **argv, int i1, int i2) {
         if (a2 < L) a2 = L;
         else if (a2 > H) a2 = H;
     } else {
-        return false;
+    	std::vector<double> alphavec_L = alpha;
+    	alphavec_L[i2] = L;
+    	double Lobj = objectiveFunction(argc, argv, alphavec_L, target, points);
+    	
+    	std::vector<double> alphavec_H = alpha;
+    	alphavec_H[i2] = H;
+        double Hobj = objectiveFunction(argc, argv, alphavec_H, target, points);
+        
+        if (Lobj < Hobj - eps) a2 = L;
+        else if (Lobj > Hobj + eps) a2 = H;
+     	else {
+     		a2 = alpha2;
+    	}
     }
 
     if (abs(a2 - alpha2) < eps * (a2 + alpha2 + eps)) return false;
 
     double a1 = alpha1 + s * (alpha2 - a2);
 
-    double oldAlpha1 = alpha1;
-    double oldAlpha2 = alpha2;
-
-    double b1 = b - E1 - y1 * (a1 - alpha1) * k11 - y2 * (a2 - alpha2) * k12;
-    double b2 = b - E2 - y1 * (a1 - alpha1) * k12 - y2 * (a2 - alpha2) * k22;
+	// Update threshold b
+    double b1 = E1 + y1 * (a1 - alpha1) * k11 + y2 * (a2 - alpha2) * k12 + b;
+    double b2 = E2 + y1 * (a1 - alpha1) * k12 + y2 * (a2 - alpha2) * k22 + b;
     if (0 < a1 && a1 < C) b = b1;
     else if (0 < a2 && a2 < C) b = b2;
     else b = (b1 + b2) / 2;
 
+	// Update weights w
+
+    for (size_t i = 0; i < w.size(); i++) {
+        w[i] += y1 * (a1 - alpha1) * points[i1][i] + y2 * (a2 - alpha2) * points[i2][i];
+    }
+
     alpha[i1] = a1;
     alpha[i2] = a2;
 
-    updateWeights(i1, i2, oldAlpha1, oldAlpha2);
-
     return true;
+}
+
+int examineExample(int argc, char **argv, int i2){
+	double y2 = target[i2];
+	double alpha2 = alpha[i2];
+	double E2 = SVMOutputonpoint(argc, argv, i2) - y2;
+	double r2 = E2 * y2;
+
+	if ((r2 < -tol && alpha2 < C) || (r2 > tol && alpha2 > 0)){
+		for (size_t i1 = 0; i1 < alpha.size(); ++i1) {
+           		 if (takeStep(argc, argv, i1, i2)) return 1;
+        	}
+    	}
+    	return 0;
 }
 
 // SMO method
@@ -285,11 +306,11 @@ void SMO(int argc, char **argv) {
         numChanged = 0;
         if (examineAll) {
             for (size_t i = 0; i < points[0].size(); i++)
-                numChanged += takeStep(argc, argv, rand() % points[0].size(), i);
+                numChanged += examineExample(argc, argv, i);
         } else {
             for (size_t i = 0; i < points[0].size(); i++)
-                if (alpha[i] > 0 && alpha[i] < C)
-                    numChanged += takeStep(argc, argv, rand() % points[0].size(), i);
+                if (alpha[i] != 0 && alpha[i] < C)
+                    numChanged += examineExample(argc, argv, i);
         }
 
         if (examineAll) examineAll = false;
